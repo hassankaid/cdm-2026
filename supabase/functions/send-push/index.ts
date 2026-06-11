@@ -13,7 +13,8 @@ Deno.serve(async (req) => {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { user_ids, title, body, url: targetUrl, tag } = await req.json().catch(() => ({}));
+  const { user_ids, exclude_user_id, title, body, url: targetUrl, tag } =
+    await req.json().catch(() => ({}));
 
   webpush.setVapidDetails(
     Deno.env.get("VAPID_SUBJECT")!,
@@ -28,6 +29,7 @@ Deno.serve(async (req) => {
 
   let query = supabase.from("push_subscriptions").select("id, endpoint, p256dh, auth");
   if (Array.isArray(user_ids) && user_ids.length > 0) query = query.in("user_id", user_ids);
+  if (exclude_user_id) query = query.neq("user_id", exclude_user_id);
   const { data: subs } = await query;
 
   const payload = JSON.stringify({

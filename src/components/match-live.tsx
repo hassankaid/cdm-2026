@@ -127,10 +127,9 @@ export function MatchLive(props: {
   const live = m.status === "live";
   const finished = m.status === "finished";
   const showScore = live || finished;
+  const started = live || finished || new Date(kickoffISO).getTime() <= Date.now();
   const myPred = preds.find((p) => p.user_id === myUserId);
-  const others = preds
-    .filter((p) => p.user_id !== myUserId)
-    .sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+  const allPreds = [...preds].sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col">
@@ -215,6 +214,56 @@ export function MatchLive(props: {
           </div>
         </section>
 
+        {/* Les pronos de tout le monde (visibles au coup d'envoi) */}
+        <section className="rise mt-6" style={{ animationDelay: "0.08s" }}>
+          <h2 className="mb-3 font-display text-base uppercase tracking-wide text-ink">
+            Les pronos de tout le monde
+          </h2>
+          {!started ? (
+            <p className="rounded-2xl border border-dashed border-line bg-pitch-900/30 px-4 py-6 text-center text-sm text-muted">
+              🔒 Les pronos de chacun s&apos;affichent au coup d&apos;envoi.
+            </p>
+          ) : allPreds.length === 0 ? (
+            <p className="rounded-2xl border border-line bg-pitch-900/40 px-4 py-6 text-center text-sm text-muted">
+              Personne n&apos;a pronostiqué ce match.
+            </p>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-line bg-pitch-900/40">
+              {allPreds.map((p) => {
+                const isMe = p.user_id === myUserId;
+                return (
+                  <div
+                    key={p.user_id}
+                    className={`flex items-center gap-3 border-b border-line/50 px-4 py-2.5 last:border-0 ${
+                      isMe ? "bg-volt/5" : ""
+                    }`}
+                  >
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-pitch-800 text-xs font-bold text-ink">
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="flex-1 truncate text-sm text-ink">
+                      {p.name}
+                      {isMe && <span className="ml-1 text-volt">· toi</span>}
+                    </span>
+                    <span className="font-display text-base tabular-nums text-ink">
+                      {p.pred_home}–{p.pred_away}
+                    </span>
+                    {finished && p.points != null && (
+                      <span
+                        className={`w-8 text-right text-xs font-bold ${
+                          p.points > 0 ? "text-volt" : "text-muted"
+                        }`}
+                      >
+                        +{p.points}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
         {/* Timeline */}
         <section className="rise mt-6" style={{ animationDelay: "0.1s" }}>
           <h2 className="mb-3 font-display text-base uppercase tracking-wide text-ink">
@@ -246,35 +295,6 @@ export function MatchLive(props: {
           )}
         </section>
 
-        {/* Pronos des autres (visibles après le coup d'envoi) */}
-        {others.length > 0 && (
-          <section className="rise mt-6" style={{ animationDelay: "0.15s" }}>
-            <h2 className="mb-3 font-display text-base uppercase tracking-wide text-ink">
-              Les pronos du groupe
-            </h2>
-            <div className="overflow-hidden rounded-2xl border border-line bg-pitch-900/40">
-              {others.map((p, i) => (
-                <div
-                  key={p.user_id}
-                  className="flex items-center gap-3 border-b border-line/50 px-4 py-2.5 last:border-0"
-                >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-pitch-800 text-xs font-bold text-ink">
-                    {p.name.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="flex-1 truncate text-sm text-ink">{p.name}</span>
-                  <span className="font-display text-base tabular-nums text-muted">
-                    {p.pred_home}–{p.pred_away}
-                  </span>
-                  {finished && p.points != null && (
-                    <span className={`w-8 text-right text-xs font-bold ${p.points > 0 ? "text-volt" : "text-muted"}`}>
-                      +{p.points}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
       </main>
     </div>
   );

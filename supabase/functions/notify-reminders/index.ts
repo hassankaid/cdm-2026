@@ -40,16 +40,6 @@ Deno.serve(async (req) => {
       .insert({ event_key: `remind-${m.id}`, kind: "rappel" });
     if (logIns.error) continue;
 
-    // Joueurs sans prono sur ce match
-    const { data: allUsers } = await supabase.from("profiles").select("id");
-    const { data: predicted } = await supabase
-      .from("predictions")
-      .select("user_id")
-      .eq("match_id", m.id);
-    const predSet = new Set((predicted ?? []).map((p) => p.user_id));
-    const absent = (allUsers ?? []).map((u) => u.id).filter((id) => !predSet.has(id));
-    if (absent.length === 0) continue;
-
     // deno-lint-ignore no-explicit-any
     const h = m.home as any;
     // deno-lint-ignore no-explicit-any
@@ -63,22 +53,21 @@ Deno.serve(async (req) => {
       const gen = await fetch(`${SUPA_URL}/functions/v1/generate-notif`, {
         method: "POST",
         headers: fnHeaders,
-        body: JSON.stringify({ type: "rappel_absent", facts }),
+        body: JSON.stringify({ type: "rappel_match", facts }),
       }).then((r) => r.json());
-      if (gen?.text) {
-        await fetch(`${SUPA_URL}/functions/v1/send-push`, {
-          method: "POST",
-          headers: fnHeaders,
-          body: JSON.stringify({
-            user_ids: absent,
-            title: "⏰ Ton prono ?",
-            body: gen.text,
-            url: "/matchs",
-            tag: `remind-${m.id}`,
-          }),
-        });
-        reminded++;
-      }
+      const text = gen?.text || `${facts.match} dans ~30 min ! Pense à ton prono ⚽`;
+      // Rappel envoyé à TOUT le monde (pas seulement aux retardataires)
+      await fetch(`${SUPA_URL}/functions/v1/send-push`, {
+        method: "POST",
+        headers: fnHeaders,
+        body: JSON.stringify({
+          title: "⏰ Match bientôt",
+          body: text,
+          url: "/matchs",
+          tag: `remind-${m.id}`,
+        }),
+      });
+      reminded++;
     } catch (_e) {
       // on continue avec les autres matchs
     }
