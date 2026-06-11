@@ -210,10 +210,67 @@ Deno.serve(async (req) => {
           player_out: null,
           detail: `${f.goals?.home ?? 0}-${f.goals?.away ?? 0}`,
         });
+        // Buteurs (déjà en base via les synchros live)
+        const { data: goalEvents } = await supabase
+          .from("match_events")
+          .select("player_name, minute")
+          .eq("match_id", matchId)
+          .in("type", ["goal", "penalty_goal", "own_goal"])
+          .order("minute", { ascending: true });
+        const buteurs = (goalEvents ?? []).map(
+          (g) => `${g.player_name ?? "?"} ${g.minute ?? "?"}'`,
+        );
+
+        // Tops / flops du match : le scoring a déjà rempli predictions.points
+        // au passage en "finished" (trigger recompute_match_points).
+        const { data: preds } = await supabase
+          .from("predictions")
+          .select("pred_home, pred_away, points, profiles(display_name)")
+          .eq("match_id", matchId)
+          .not("points", "is", null)
+          .order("points", { ascending: false });
+        const hs = f.goals?.home ?? 0;
+        const as = f.goals?.away ?? 0;
+        const pname = (p: { profiles?: unknown }): string => {
+          const pr = p.profiles as
+            | { display_name?: string }
+            | { display_name?: string }[]
+            | null;
+          return (
+            (Array.isArray(pr) ? pr[0]?.display_name : pr?.display_name) ?? "Quelqu'un"
+          );
+        };
+        let boss: { noms: string; points: number } | null = null;
+        let clown: { nom: string; prono: string } | null = null;
+        if (preds && preds.length) {
+          const maxP = preds[0].points as number;
+          const minP = preds[preds.length - 1].points as number;
+          if (maxP > 0) {
+            const tops = preds.filter((p) => p.points === maxP);
+            boss = { noms: tops.map(pname).join(" & "), points: maxP };
+          }
+          if (minP < maxP) {
+            // Le clown = le prono le plus à l'opposé du vrai score
+            const flops = preds.filter((p) => p.points === minP);
+            const wrong = (p: { pred_home: number; pred_away: number }) =>
+              Math.abs((p.pred_home ?? 0) - hs) + Math.abs((p.pred_away ?? 0) - as);
+            flops.sort((a, b) => wrong(b) - wrong(a));
+            clown = {
+              nom: pname(flops[0]),
+              prono: `${flops[0].pred_home}-${flops[0].pred_away}`,
+            };
+          }
+        }
+        const aName = teamName.get(f.teams.home?.id) ?? f.teams.home?.name;
+        const bName = teamName.get(f.teams.away?.id) ?? f.teams.away?.name;
         const facts = {
-          equipeA: teamName.get(f.teams.home?.id) ?? f.teams.home?.name,
-          equipeB: teamName.get(f.teams.away?.id) ?? f.teams.away?.name,
-          score: `${f.score?.fulltime?.home ?? f.goals?.home ?? 0}-${f.score?.fulltime?.away ?? f.goals?.away ?? 0}`,
+          equipeA: aName,
+          equipeB: bName,
+          score: `${f.score?.fulltime?.home ?? hs}-${f.score?.fulltime?.away ?? as}`,
+          vainqueur: hs > as ? aName : as > hs ? bName : "Match nul",
+          buteurs,
+          boss,
+          clown,
         };
         try {
           const gen = await fetch(`${SUPA_URL}/functions/v1/generate-notif`, {

@@ -24,7 +24,8 @@ const OBJECTIFS: Record<string, string> = {
   tacle: "Mets en avant ou charrie gentiment un joueur précis.",
   top3: "Annonce le top 3 actuel du classement avec du piquant.",
   recap: "Résume avec humour les résultats et le classement du jour (2-3 phrases max).",
-  fin_match: "Annonce la fin du match avec le score final et un clin d'œil taquin (à ceux qui avaient bon… ou pas).",
+  fin_match:
+    "Mini-récap de fin de match : annonce le vainqueur + le score final, cite le(s) buteur(s), FÉLICITE le boss (meilleur prono du match) et CHARRIE gentiment le clown (le prono le plus à côté de la plaque). Drôle, vivant, bon enfant.",
   rappel_match: "Rappelle de poser son prono avant le coup d'envoi, avec entrain.",
   rappel_absent: "Préviens qu'un joueur n'a pas encore mis son prono et que le match approche.",
   serie: "Célèbre une série de bons pronos d'affilée.",
@@ -46,8 +47,15 @@ Deno.serve(async (req) => {
   const key = Deno.env.get("OPENROUTER_API_KEY")!;
   const model = type === "recap" ? "anthropic/claude-sonnet-4.6" : "anthropic/claude-haiku-4.5";
 
+  // Les récaps peuvent être un peu plus longs qu'une notif éclair.
+  const longTypes = type === "fin_match" || type === "recap" || type === "top3";
+  const lengthHint = longTypes
+    ? "\nLongueur : 2 à 3 phrases courtes façon mini-récap (tu peux dépasser 140 caractères, max ~260)."
+    : "";
+
   const userMsg =
     `Type : ${type}\nObjectif : ${objectif}\nFaits réels (à utiliser) : ${JSON.stringify(facts ?? {})}` +
+    lengthHint +
     (Array.isArray(recent) && recent.length
       ? `\nN'utilise AUCUNE de ces formulations déjà envoyées récemment : ${JSON.stringify(recent)}`
       : "");
