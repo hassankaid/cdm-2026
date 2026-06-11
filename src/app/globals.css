@@ -1,26 +1,140 @@
 @import "tailwindcss";
 
+/* ============================================================
+   MONDIAL 26 — Thème « stade la nuit »
+   ============================================================ */
+@theme {
+  /* Pelouse sous les projecteurs */
+  --color-pitch-950: #060d0a;
+  --color-pitch-900: #0a1712;
+  --color-pitch-800: #0f231b;
+  --color-pitch-700: #18352a;
+  --color-line: #1f4133;
+
+  /* Accents */
+  --color-volt: #c6ff3d;       /* accent principal (vert électrique) */
+  --color-volt-soft: #9fd92f;
+  --color-coral: #ff5a5f;      /* live / urgent */
+  --color-gold: #ffcf5c;       /* récompenses */
+
+  /* Texte */
+  --color-ink: #eef5f0;
+  --color-muted: #8aa096;
+
+  --font-display: var(--font-anton);
+  --font-sans: var(--font-manrope);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-pitch-950);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  background-image:
+    radial-gradient(55% 45% at 85% -10%, rgba(198, 255, 61, 0.12), transparent 60%),
+    radial-gradient(45% 40% at 8% 108%, rgba(255, 90, 95, 0.08), transparent 60%);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: var(--color-volt);
+  color: #06120c;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-pitch-700);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Grain léger sur toute la page pour la texture */
+.grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Display = condensé, large interlettrage pour le côté scoreboard */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+/* Entrées clavier */
+.field {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-line);
+  border-radius: 0.85rem;
+  padding: 0.9rem 1rem;
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.field::placeholder {
+  color: #5d7068;
+}
+.field:focus {
+  border-color: var(--color-volt);
+  box-shadow: 0 0 0 4px rgba(198, 255, 61, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Bouton principal */
+.btn-volt {
+  background: var(--color-volt);
+  color: #06120c;
+  font-weight: 800;
+  border-radius: 0.85rem;
+  padding: 0.95rem 1rem;
+  transition: transform 0.12s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  box-shadow: 0 10px 30px -10px rgba(198, 255, 61, 0.5);
+}
+.btn-volt:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 40px -12px rgba(198, 255, 61, 0.6);
+}
+.btn-volt:active {
+  transform: translateY(0);
+}
+.btn-volt:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Animation d'entrée */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.live-dot {
+  animation: glow 1.4s ease-in-out infinite;
 }

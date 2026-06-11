@@ -1,0 +1,16 @@
+{
+  "name": "Mondial 26 — Pronos entre potes",
+  "short_name": "Mondial 26",
+  "description": "Pronostics de la Coupe du Monde 2026 entre amis.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#060d0a",
+  "theme_color": "#060d0a",
+  "lang": "fr",
+  "categories": ["sports", "games", "social"],
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
