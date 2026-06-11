@@ -25,61 +25,20 @@ function timeLabel(iso: string, tz: string) {
   }).format(new Date(iso));
 }
 
-function VideoBubble({
-  guid,
-  thumb,
-  duration,
-}: {
-  guid: string;
-  thumb: string | null;
-  duration: number | null;
-}) {
-  const [play, setPlay] = useState(false);
-  const [thumbErr, setThumbErr] = useState(false);
+function VideoBubble({ guid }: { guid: string }) {
   const lib = process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID;
-
-  if (play) {
-    return (
-      <div className="aspect-[9/16] w-52 max-w-[78%] overflow-hidden rounded-2xl border border-line bg-black">
-        <iframe
-          src={`https://iframe.mediadelivery.net/embed/${lib}/${guid}?autoplay=true&preload=true`}
-          loading="lazy"
-          className="h-full w-full"
-          allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen"
-        />
-      </div>
-    );
-  }
+  // Lecteur Bunny directement : il affiche la vraie image de la vidéo en
+  // aperçu, et la lecture (au tap sur ▶) se fait AVEC le son.
   return (
-    <button
-      onClick={() => setPlay(true)}
-      className="relative aspect-[9/16] w-52 max-w-[78%] overflow-hidden rounded-2xl border border-line bg-pitch-800"
-    >
-      {thumb && !thumbErr ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={thumb}
-          alt=""
-          className="h-full w-full object-cover"
-          onError={() => setThumbErr(true)}
-        />
-      ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-2xl">
-          🎥
-          <span className="text-[10px] font-semibold text-muted">en traitement…</span>
-        </div>
-      )}
-      <span className="absolute inset-0 flex items-center justify-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-pitch-950/70 text-xl text-volt">
-          ▶
-        </span>
-      </span>
-      {duration ? (
-        <span className="absolute bottom-1.5 right-1.5 rounded bg-pitch-950/80 px-1.5 py-0.5 text-[10px] font-semibold text-ink">
-          {duration}s
-        </span>
-      ) : null}
-    </button>
+    <div className="aspect-[9/16] w-52 max-w-[78%] overflow-hidden rounded-2xl border border-line bg-black">
+      <iframe
+        src={`https://iframe.mediadelivery.net/embed/${lib}/${guid}?preload=true&responsive=true`}
+        loading="lazy"
+        className="h-full w-full"
+        allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen"
+        title="React vidéo"
+      />
+    </div>
   );
 }
 
@@ -178,11 +137,7 @@ export function ChatRoom({
                 <span className="mb-0.5 ml-1 text-[11px] font-semibold text-muted">{author}</span>
               )}
               {isVideo ? (
-                <VideoBubble
-                  guid={m.media_url as string}
-                  thumb={m.thumbnail_url ?? null}
-                  duration={m.duration ?? null}
-                />
+                <VideoBubble guid={m.media_url as string} />
               ) : (
                 <div
                   className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${
