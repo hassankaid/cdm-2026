@@ -142,7 +142,10 @@ export function ChatRoom({
 
   return (
     <>
-      <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 pb-44 pt-4">
+      <div
+        className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 pt-4"
+        style={{ paddingBottom: "calc(140px + env(safe-area-inset-bottom))" }}
+      >
         {msgs.length === 0 && (
           <p className="mt-10 text-center text-sm text-muted">Lance la causerie ! 💬</p>
         )}
@@ -196,8 +199,11 @@ export function ChatRoom({
         <div ref={endRef} />
       </div>
 
-      {/* Barre de saisie (au-dessus de la nav) */}
-      <div className="fixed inset-x-0 bottom-[60px] z-40 mx-auto max-w-lg border-t border-line/60 bg-pitch-950/95 px-3 py-2.5 backdrop-blur">
+      {/* Barre de saisie (juste au-dessus de la nav, en tenant compte de la zone de sécurité) */}
+      <div
+        className="fixed inset-x-0 z-50 mx-auto max-w-lg border-t border-line/60 bg-pitch-950/95 px-3 py-2.5 backdrop-blur"
+        style={{ bottom: "calc(54px + env(safe-area-inset-bottom))" }}
+      >
         <div className="flex items-center gap-2">
           <RecordReact userId={myUserId} matchId={matchId} />
           <input

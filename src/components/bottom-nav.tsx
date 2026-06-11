@@ -14,7 +14,7 @@ const TABS = [
 export function BottomNav() {
   const path = usePathname();
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-line/60 bg-pitch-950/90 backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-line/60 bg-pitch-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur">
       <div className="mx-auto flex max-w-lg">
         {TABS.map((t) => {
           const active = t.href === "/" ? path === "/" : path.startsWith(t.href);

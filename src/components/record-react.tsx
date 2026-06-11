@@ -97,11 +97,12 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
 
   return (
     <>
+      {/* Pas de "capture" forcé → la caméra native s'ouvre AVEC le bouton pour
+          changer de caméra (avant/arrière), et on peut aussi choisir une vidéo. */}
       <input
         ref={inputRef}
         type="file"
         accept="video/*"
-        capture="user"
         onChange={onFile}
         className="hidden"
       />
