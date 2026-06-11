@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as tus from "tus-js-client";
 import { createClient } from "@/lib/supabase/client";
 
@@ -20,17 +20,24 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
   const timer = useRef<number | null>(null);
   const durRef = useRef(0);
 
-  const attachLive = useCallback(() => {
-    requestAnimationFrame(() => {
-      if (videoRef.current && streamRef.current) {
-        videoRef.current.src = "";
-        videoRef.current.srcObject = streamRef.current;
-        videoRef.current.muted = true;
-        videoRef.current.loop = false;
-        videoRef.current.play().catch(() => {});
-      }
-    });
-  }, []);
+  // Connecte le flux à l'élément vidéo APRÈS le rendu (fiable sur mobile)
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if ((phase === "ready" || phase === "recording") && streamRef.current) {
+      v.srcObject = streamRef.current;
+      v.removeAttribute("src");
+      v.muted = true;
+      v.loop = false;
+      v.play().catch(() => {});
+    } else if (phase === "preview" && previewUrl.current) {
+      v.srcObject = null;
+      v.src = previewUrl.current;
+      v.muted = false;
+      v.loop = true;
+      v.play().catch(() => {});
+    }
+  }, [phase]);
 
   const open = useCallback(async () => {
     setError(null);
@@ -42,12 +49,11 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
       });
       streamRef.current = stream;
       setPhase("ready");
-      attachLive();
     } catch {
-      setError("Caméra/micro non autorisés. Active-les dans les réglages du téléphone.");
+      setError("Caméra/micro non autorisés. Vérifie les réglages du téléphone.");
       setPhase("closed");
     }
-  }, [attachLive]);
+  }, []);
 
   function start() {
     if (phase !== "ready" || !streamRef.current) return;
@@ -64,17 +70,9 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
     rec.onstop = () => {
       const b = new Blob(chunks.current, { type: mime });
       blob.current = b;
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
       previewUrl.current = URL.createObjectURL(b);
       setPhase("preview");
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = null;
-          videoRef.current.src = previewUrl.current!;
-          videoRef.current.muted = false;
-          videoRef.current.loop = true;
-          videoRef.current.play().catch(() => {});
-        }
-      });
     };
     recRef.current = rec;
     rec.start();
@@ -151,10 +149,10 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
 
   function retake() {
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+    previewUrl.current = null;
     blob.current = null;
     chunks.current = [];
     setPhase("ready");
-    attachLive();
   }
 
   const R = 34;
@@ -172,7 +170,7 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
       </button>
 
       {error && phase === "closed" && (
-        <div className="fixed left-1/2 top-3 z-[90] -translate-x-1/2 rounded-full border border-coral/40 bg-pitch-900 px-4 py-1.5 text-xs font-semibold text-coral shadow-lg">
+        <div className="fixed left-1/2 top-3 z-[90] -translate-x-1/2 rounded-full border border-coral/40 bg-pitch-900 px-4 py-1.5 text-center text-xs font-semibold text-coral shadow-lg">
           {error}
         </div>
       )}
@@ -189,11 +187,13 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
             <span className="w-12" />
           </div>
 
-          <div className="relative flex-1 overflow-hidden">
+          <div className="relative flex-1 overflow-hidden bg-black">
             <video
               ref={videoRef}
+              autoPlay
+              muted
               playsInline
-              className="h-full w-full -scale-x-100 object-cover"
+              className={`h-full w-full object-cover ${phase === "preview" ? "" : "-scale-x-100"}`}
             />
             {phase === "init" && (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">
@@ -234,8 +234,8 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
                     />
                   </svg>
                   <span
-                    className={`rounded-full bg-coral transition-all ${
-                      phase === "recording" ? "h-7 w-7 rounded-xl" : "h-14 w-14"
+                    className={`bg-coral transition-all ${
+                      phase === "recording" ? "h-7 w-7 rounded-md" : "h-14 w-14 rounded-full"
                     }`}
                   />
                 </button>
