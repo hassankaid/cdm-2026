@@ -1,109 +1,62 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import * as tus from "tus-js-client";
 import { createClient } from "@/lib/supabase/client";
 
-const MAX_MS = 20000;
-type Phase = "closed" | "init" | "ready" | "recording" | "preview" | "uploading";
+const MAX_S = 20;
+type Phase = "idle" | "preview" | "uploading";
 
 export function RecordReact({ userId, matchId }: { userId: string; matchId: number | null }) {
-  const [phase, setPhase] = useState<Phase>("closed");
-  const [pct, setPct] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const recRef = useRef<MediaRecorder | null>(null);
-  const chunks = useRef<Blob[]>([]);
-  const blob = useRef<Blob | null>(null);
-  const previewUrl = useRef<string | null>(null);
-  const timer = useRef<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<File | null>(null);
   const durRef = useRef(0);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [error, setError] = useState<string | null>(null);
 
-  // Connecte le flux à l'élément vidéo APRÈS le rendu (fiable sur mobile)
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    if ((phase === "ready" || phase === "recording") && streamRef.current) {
-      v.srcObject = streamRef.current;
-      v.removeAttribute("src");
-      v.muted = true;
-      v.loop = false;
-      v.play().catch(() => {});
-    } else if (phase === "preview" && previewUrl.current) {
-      v.srcObject = null;
-      v.src = previewUrl.current;
-      v.muted = false;
-      v.loop = true;
-      v.play().catch(() => {});
-    }
-  }, [phase]);
-
-  const open = useCallback(async () => {
+  function pick() {
     setError(null);
-    setPhase("init");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 720 } },
-        audio: true,
-      });
-      streamRef.current = stream;
-      setPhase("ready");
-    } catch {
-      setError("Caméra/micro non autorisés. Vérifie les réglages du téléphone.");
-      setPhase("closed");
-    }
-  }, []);
-
-  function start() {
-    if (phase !== "ready" || !streamRef.current) return;
-    chunks.current = [];
-    const mime = MediaRecorder.isTypeSupported("video/mp4")
-      ? "video/mp4"
-      : MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-        ? "video/webm;codecs=vp9"
-        : "video/webm";
-    const rec = new MediaRecorder(streamRef.current, { mimeType: mime });
-    rec.ondataavailable = (e) => {
-      if (e.data.size) chunks.current.push(e.data);
-    };
-    rec.onstop = () => {
-      const b = new Blob(chunks.current, { type: mime });
-      blob.current = b;
-      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
-      previewUrl.current = URL.createObjectURL(b);
-      setPhase("preview");
-    };
-    recRef.current = rec;
-    rec.start();
-    setPhase("recording");
-    setPct(0);
-    const t0 = Date.now();
-    timer.current = window.setInterval(() => {
-      const e = Date.now() - t0;
-      durRef.current = e;
-      setPct(Math.min(100, (e / MAX_MS) * 100));
-      if (e >= MAX_MS) stop();
-    }, 80);
+    inputRef.current?.click();
   }
 
-  function stop() {
-    if (timer.current) {
-      clearInterval(timer.current);
-      timer.current = null;
+  function readDuration(url: string): Promise<number> {
+    return new Promise((resolve) => {
+      const v = document.createElement("video");
+      v.preload = "metadata";
+      v.onloadedmetadata = () => resolve(v.duration);
+      v.onerror = () => resolve(0);
+      v.src = url;
+    });
+  }
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const dur = await readDuration(url);
+    if (Number.isFinite(dur) && dur > MAX_S + 2) {
+      URL.revokeObjectURL(url);
+      setError(`Vidéo trop longue (${Math.round(dur)} s). Garde-la sous ${MAX_S} s 🙏`);
+      return;
     }
-    if (recRef.current && recRef.current.state !== "inactive") recRef.current.stop();
+    durRef.current = Number.isFinite(dur) && dur > 0 ? Math.min(MAX_S, Math.round(dur)) : MAX_S;
+    fileRef.current = file;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(url);
+    setPhase("preview");
   }
 
   async function send() {
-    if (!blob.current) return;
+    if (!fileRef.current) return;
     setPhase("uploading");
     try {
       const supabase = createClient();
       const { data, error: fnErr } = await supabase.functions.invoke("create-react", { body: {} });
       if (fnErr || !data?.guid) throw new Error("create");
       await new Promise<void>((resolve, reject) => {
-        const up = new tus.Upload(blob.current!, {
+        const up = new tus.Upload(fileRef.current!, {
           endpoint: "https://video.bunnycdn.com/tusupload",
           retryDelays: [0, 1000, 3000, 5000],
           headers: {
@@ -112,7 +65,7 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
             VideoId: data.guid,
             LibraryId: String(data.libraryId),
           },
-          metadata: { filetype: blob.current!.type || "video/webm", title: "react" },
+          metadata: { filetype: fileRef.current!.type || "video/mp4", title: "react" },
           onError: () => reject(new Error("tus")),
           onSuccess: () => resolve(),
         });
@@ -126,7 +79,7 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
         media_type: "video",
         media_url: data.guid,
         thumbnail_url: `https://${cdn}/${data.guid}/thumbnail.jpg`,
-        duration: Math.round(durRef.current / 1000),
+        duration: durRef.current,
       });
       cleanup();
     } catch {
@@ -136,70 +89,58 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
   }
 
   function cleanup() {
-    if (timer.current) clearInterval(timer.current);
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
-    previewUrl.current = null;
-    blob.current = null;
-    chunks.current = [];
-    setPct(0);
-    setPhase("closed");
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    fileRef.current = null;
+    setPhase("idle");
   }
-
-  function retake() {
-    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
-    previewUrl.current = null;
-    blob.current = null;
-    chunks.current = [];
-    setPhase("ready");
-  }
-
-  const R = 34;
-  const C = 2 * Math.PI * R;
 
   return (
     <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*"
+        capture="user"
+        onChange={onFile}
+        className="hidden"
+      />
       <button
         type="button"
-        onClick={open}
+        onClick={pick}
         aria-label="Envoyer un react vidéo"
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-line bg-pitch-800 text-lg transition-colors hover:border-volt/60"
       >
         🎥
       </button>
 
-      {error && phase === "closed" && (
+      {error && (
         <div className="fixed left-1/2 top-3 z-[90] -translate-x-1/2 rounded-full border border-coral/40 bg-pitch-900 px-4 py-1.5 text-center text-xs font-semibold text-coral shadow-lg">
           {error}
         </div>
       )}
 
-      {phase !== "closed" && (
+      {phase !== "idle" && previewUrl && (
         <div className="fixed inset-0 z-[80] flex flex-col bg-pitch-950">
           <div className="flex items-center justify-between px-5 py-3">
             <button onClick={cleanup} className="text-sm font-semibold text-muted">
               Fermer
             </button>
             <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-              React · 20 s max
+              Ton react
             </span>
             <span className="w-12" />
           </div>
 
           <div className="relative flex-1 overflow-hidden bg-black">
             <video
-              ref={videoRef}
+              src={previewUrl}
+              controls
               autoPlay
-              muted
+              loop
               playsInline
-              className={`h-full w-full object-cover ${phase === "preview" ? "" : "-scale-x-100"}`}
+              className="h-full w-full object-contain"
             />
-            {phase === "init" && (
-              <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">
-                Ouverture de la caméra…
-              </div>
-            )}
             {phase === "uploading" && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-pitch-950/70">
                 <span className="text-3xl">🎬</span>
@@ -209,55 +150,20 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
           </div>
 
           <div className="flex items-center justify-center gap-6 px-6 py-6">
-            {(phase === "ready" || phase === "recording") && (
-              <div className="flex flex-col items-center gap-2">
-                <button
-                  type="button"
-                  onPointerDown={start}
-                  onPointerUp={stop}
-                  onPointerLeave={stop}
-                  onPointerCancel={stop}
-                  className="relative flex h-20 w-20 touch-none select-none items-center justify-center"
-                >
-                  <svg className="absolute inset-0 -rotate-90" viewBox="0 0 80 80">
-                    <circle cx="40" cy="40" r={R} fill="none" stroke="#18352a" strokeWidth="5" />
-                    <circle
-                      cx="40"
-                      cy="40"
-                      r={R}
-                      fill="none"
-                      stroke="#ff5a5f"
-                      strokeWidth="5"
-                      strokeLinecap="round"
-                      strokeDasharray={C}
-                      strokeDashoffset={C * (1 - pct / 100)}
-                    />
-                  </svg>
-                  <span
-                    className={`bg-coral transition-all ${
-                      phase === "recording" ? "h-7 w-7 rounded-md" : "h-14 w-14 rounded-full"
-                    }`}
-                  />
-                </button>
-                <span className="text-xs text-muted">
-                  {phase === "recording" ? "Relâche pour arrêter" : "Maintiens pour filmer"}
-                </span>
-              </div>
-            )}
-
-            {phase === "preview" && (
-              <>
-                <button
-                  onClick={retake}
-                  className="rounded-full border border-line bg-pitch-800 px-5 py-3 text-sm font-semibold text-ink"
-                >
-                  Refaire
-                </button>
-                <button onClick={send} className="btn-volt px-6 py-3">
-                  Envoyer 🚀
-                </button>
-              </>
-            )}
+            <button
+              onClick={pick}
+              disabled={phase === "uploading"}
+              className="rounded-full border border-line bg-pitch-800 px-5 py-3 text-sm font-semibold text-ink disabled:opacity-50"
+            >
+              Refaire
+            </button>
+            <button
+              onClick={send}
+              disabled={phase === "uploading"}
+              className="btn-volt px-6 py-3 disabled:opacity-50"
+            >
+              {phase === "uploading" ? "Envoi…" : "Envoyer 🚀"}
+            </button>
           </div>
         </div>
       )}
