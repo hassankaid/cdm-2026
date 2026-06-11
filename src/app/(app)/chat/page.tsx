@@ -18,7 +18,8 @@ export default async function ChatPage() {
 
   const { data: msgs } = await supabase
     .from("chat_messages")
-    .select("id, user_id, content, type, created_at")
+    .select("id, user_id, content, type, created_at, match_id")
+    .is("match_id", null)
     .order("created_at", { ascending: false })
     .limit(60);
   const initial = (msgs ?? []).slice().reverse();

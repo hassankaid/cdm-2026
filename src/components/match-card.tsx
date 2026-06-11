@@ -93,16 +93,22 @@ export function MatchCard(props: {
       {/* Pied */}
       <Footer state={state} save={save} pred={pred} editable={editable} />
 
-      <Link
-        href={`/matchs/${id}`}
-        className={`mt-2 block text-center text-[11px] font-semibold transition-colors ${
-          state === "live"
-            ? "text-coral hover:text-coral/80"
-            : "text-muted/70 hover:text-volt"
-        }`}
-      >
-        {state === "live" ? "Suivre en direct →" : "Détail & fil du match →"}
-      </Link>
+      <div className="mt-2 flex items-center justify-center gap-4">
+        <Link
+          href={`/matchs/${id}`}
+          className={`text-[11px] font-semibold transition-colors ${
+            state === "live" ? "text-coral hover:text-coral/80" : "text-muted/70 hover:text-volt"
+          }`}
+        >
+          {state === "live" ? "Suivre en direct →" : "Détail & fil →"}
+        </Link>
+        <Link
+          href={`/matchs/${id}/chat`}
+          className="text-[11px] font-semibold text-muted/70 transition-colors hover:text-volt"
+        >
+          💬 Discussion
+        </Link>
+      </div>
     </div>
   );
 }

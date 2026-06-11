@@ -6,9 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 type Msg = {
   id: number;
   user_id: string | null;
-  content: string;
+  content: string | null;
   type: string;
   created_at: string;
+  match_id?: number | null;
 };
 
 function timeLabel(iso: string, tz: string) {
@@ -24,11 +25,13 @@ export function ChatRoom({
   names,
   myUserId,
   tz,
+  matchId = null,
 }: {
   initial: Msg[];
   names: Record<string, string>;
   myUserId: string;
   tz: string;
+  matchId?: number | null;
 }) {
   const [msgs, setMsgs] = useState<Msg[]>(initial);
   const [text, setText] = useState("");
@@ -48,6 +51,7 @@ export function ChatRoom({
         { event: "INSERT", schema: "public", table: "chat_messages" },
         (payload) => {
           const m = payload.new as Msg;
+          if ((m.match_id ?? null) !== matchId) return; // garder la bonne conversation
           setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
         },
       )
@@ -64,7 +68,7 @@ export function ChatRoom({
     setText("");
     const { error } = await createClient()
       .from("chat_messages")
-      .insert({ user_id: myUserId, content: c, type: "user" });
+      .insert({ user_id: myUserId, content: c, type: "user", match_id: matchId });
     if (error) setText(c);
     setSending(false);
   }

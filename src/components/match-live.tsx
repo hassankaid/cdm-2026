@@ -186,6 +186,14 @@ export function MatchLive(props: {
           {venue && <p className="mt-4 text-center text-[11px] text-muted">{venue}</p>}
         </section>
 
+        {/* Discussion du match */}
+        <Link
+          href={`/matchs/${matchId}/chat`}
+          className="rise mt-4 flex items-center justify-center gap-2 rounded-2xl border border-line bg-pitch-900/50 py-3 text-sm font-semibold text-ink transition-colors hover:border-volt/50"
+        >
+          💬 Discussion du match
+        </Link>
+
         {/* Ton prono */}
         <section className="rise mt-4" style={{ animationDelay: "0.05s" }}>
           <div className="flex items-center justify-between rounded-2xl border border-line bg-pitch-900/40 px-4 py-3">

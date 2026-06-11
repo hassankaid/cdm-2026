@@ -134,27 +134,49 @@ export type Database = {
       }
       chat_messages: {
         Row: {
-          content: string
+          content: string | null
           created_at: string
+          duration: number | null
           id: number
+          match_id: number | null
+          media_type: string | null
+          media_url: string | null
+          thumbnail_url: string | null
           type: string
           user_id: string | null
         }
         Insert: {
-          content: string
+          content?: string | null
           created_at?: string
+          duration?: number | null
           id?: never
+          match_id?: number | null
+          media_type?: string | null
+          media_url?: string | null
+          thumbnail_url?: string | null
           type?: string
           user_id?: string | null
         }
         Update: {
-          content?: string
+          content?: string | null
           created_at?: string
+          duration?: number | null
           id?: never
+          match_id?: number | null
+          media_type?: string | null
+          media_url?: string | null
+          thumbnail_url?: string | null
           type?: string
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "chat_messages_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "chat_messages_user_id_fkey"
             columns: ["user_id"]
