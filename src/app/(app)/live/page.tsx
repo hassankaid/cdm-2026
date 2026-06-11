@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { MatchCard } from "@/components/match-card";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { timeIn, dayLabel } from "@/lib/format";
 
 type TeamMini = {
@@ -89,6 +90,7 @@ export default async function LivePage() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col">
+      <AutoRefresh seconds={15} />
       <header className="sticky top-0 z-40 flex items-center justify-center gap-2 border-b border-line/60 bg-pitch-950/80 px-5 py-3.5 backdrop-blur">
         <span className="live-dot inline-block h-2 w-2 rounded-full bg-coral" />
         <div className="font-display text-lg leading-none">

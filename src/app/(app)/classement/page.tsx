@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { LeaderboardView } from "@/components/leaderboard-view";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 export default async function ClassementPage() {
   const supabase = await createClient();
@@ -14,6 +15,7 @@ export default async function ClassementPage() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col">
+      <AutoRefresh seconds={20} />
       <header className="sticky top-0 z-40 flex items-center justify-center border-b border-line/60 bg-pitch-950/80 px-5 py-3.5 backdrop-blur">
         <div className="font-display text-lg leading-none">
           LE <span className="text-volt">CLASSEMENT</span>

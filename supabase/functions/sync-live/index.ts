@@ -124,6 +124,31 @@ Deno.serve(async (req) => {
       })
       .eq("id", matchId);
 
+    // Notif de coup d'envoi (une seule fois grâce à notifications_log)
+    if (status === "live") {
+      const lk = await supabase
+        .from("notifications_log")
+        .insert({ event_key: `kickoff-${matchId}`, kind: "kickoff" });
+      if (!lk.error) {
+        const a = teamName.get(f.teams.home?.id) ?? f.teams.home?.name;
+        const b = teamName.get(f.teams.away?.id) ?? f.teams.away?.name;
+        try {
+          await fetch(`${SUPA_URL}/functions/v1/send-push`, {
+            method: "POST",
+            headers: fnHeaders,
+            body: JSON.stringify({
+              title: "⚽ Coup d'envoi !",
+              body: `${a} - ${b}, c'est parti ! Suis le match en direct 🔴`,
+              url: `/matchs/${matchId}`,
+              tag: `kickoff-${matchId}`,
+            }),
+          });
+        } catch (_e) {
+          // une notif ratée n'interrompt pas la synchro
+        }
+      }
+    }
+
     // Notif de fin de match (une seule fois grâce à notifications_log)
     if (status === "finished") {
       const logIns = await supabase
