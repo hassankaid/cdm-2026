@@ -125,14 +125,17 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
   }
 
   async function send() {
-    if (!blob.current) return;
-    setPhase("uploading");
+    const file = blob.current;
+    const dur = Math.round(durRef.current / 1000);
+    if (!file) return;
+    // Retour instantané au chat : on ferme l'écran, l'upload se fait en arrière-plan
+    cleanup();
     try {
       const supabase = createClient();
       const { data, error: fnErr } = await supabase.functions.invoke("create-react", { body: {} });
       if (fnErr || !data?.guid) throw new Error("create");
       await new Promise<void>((resolve, reject) => {
-        const up = new tus.Upload(blob.current!, {
+        const up = new tus.Upload(file, {
           endpoint: "https://video.bunnycdn.com/tusupload",
           retryDelays: [0, 1000, 3000, 5000],
           headers: {
@@ -141,7 +144,7 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
             VideoId: data.guid,
             LibraryId: String(data.libraryId),
           },
-          metadata: { filetype: blob.current!.type || "video/webm", title: "react" },
+          metadata: { filetype: file.type || "video/webm", title: "react" },
           onError: () => reject(new Error("tus")),
           onSuccess: () => resolve(),
         });
@@ -155,12 +158,10 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
         media_type: "video",
         media_url: data.guid,
         thumbnail_url: `https://${cdn}/${data.guid}/thumbnail.jpg`,
-        duration: Math.round(durRef.current / 1000),
+        duration: dur,
       });
-      cleanup();
     } catch {
-      setError("Échec de l'envoi. Réessaie.");
-      setPhase("preview");
+      setError("Ton react n'a pas pu être envoyé. Réessaie.");
     }
   }
 
