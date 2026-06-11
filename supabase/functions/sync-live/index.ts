@@ -191,14 +191,33 @@ Deno.serve(async (req) => {
     const apiEvents = evRes.response ?? [];
     if (apiEvents.length === 0) continue;
 
-    // Dédoublonnage : on récupère les events déjà en base
+    // Dédoublonnage + enrichissement (l'API ajoute le buteur APRÈS coup)
     const { data: existing } = await supabase
       .from("match_events")
-      .select("type, minute, player_name, team_id")
+      .select("id, type, minute, minute_extra, player_name, team_id")
       .eq("match_id", matchId);
-    const seen = new Set((existing ?? []).map((e) => eventKey(e as never)));
+
+    const isGoal = (t: string) => t === "goal" || t === "own_goal" || t === "penalty_goal";
+    const stableKey = (t: string, mn: unknown, mx: unknown, tm: unknown) =>
+      `${t}|${mn ?? ""}|${mx ?? ""}|${tm ?? ""}`;
+
+    // Buts existants indexés par (type, minute, équipe) → pour compléter le buteur
+    const goalByStable = new Map<string, { id: number; player_name: string | null }>();
+    const seenFull = new Set<string>();
+    for (const e of existing ?? []) {
+      if (isGoal(e.type as string)) {
+        const k = stableKey(e.type, e.minute, e.minute_extra, e.team_id);
+        const cur = goalByStable.get(k);
+        if (!cur || (!cur.player_name && e.player_name)) {
+          goalByStable.set(k, { id: e.id as number, player_name: (e.player_name as string) ?? null });
+        }
+      } else {
+        seenFull.add(eventKey(e as never));
+      }
+    }
 
     const toInsert: Record<string, unknown>[] = [];
+    const toUpdate: { id: number; player_name: string; assist_name: string | null; detail: string | null }[] = [];
     for (const ev of apiEvents) {
       const type = mapEventType(ev.type, ev.detail);
       if (!type) continue;
@@ -214,10 +233,40 @@ Deno.serve(async (req) => {
         player_out: isSubst ? ev.assist?.name ?? null : null,
         detail: ev.detail ?? null,
       };
-      if (seen.has(eventKey(row as never))) continue;
-      seen.add(eventKey(row as never));
-      toInsert.push(row);
+      if (isGoal(type)) {
+        const k = stableKey(type, row.minute, row.minute_extra, row.team_id);
+        const ex = goalByStable.get(k);
+        if (ex) {
+          // but déjà connu : on complète juste le buteur s'il manquait (pas de doublon)
+          if (!ex.player_name && row.player_name && ex.id) {
+            toUpdate.push({
+              id: ex.id,
+              player_name: row.player_name as string,
+              assist_name: row.assist_name as string | null,
+              detail: row.detail as string | null,
+            });
+            ex.player_name = row.player_name as string;
+          }
+          continue;
+        }
+        goalByStable.set(k, { id: 0, player_name: (row.player_name as string) ?? null });
+        toInsert.push(row);
+      } else {
+        const fk = eventKey(row as never);
+        if (seenFull.has(fk)) continue;
+        seenFull.add(fk);
+        toInsert.push(row);
+      }
     }
+
+    // Compléter les buts dont le buteur vient d'arriver
+    for (const u of toUpdate) {
+      await supabase
+        .from("match_events")
+        .update({ player_name: u.player_name, assist_name: u.assist_name, detail: u.detail })
+        .eq("id", u.id);
+    }
+
     if (toInsert.length > 0) {
       const ins = await supabase.from("match_events").insert(toInsert);
       if (!ins.error) {
