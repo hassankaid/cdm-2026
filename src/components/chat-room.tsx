@@ -35,6 +35,7 @@ function VideoBubble({
   duration: number | null;
 }) {
   const [play, setPlay] = useState(false);
+  const [thumbErr, setThumbErr] = useState(false);
   const lib = process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID;
 
   if (play) {
@@ -54,11 +55,19 @@ function VideoBubble({
       onClick={() => setPlay(true)}
       className="relative aspect-[9/16] w-52 max-w-[78%] overflow-hidden rounded-2xl border border-line bg-pitch-800"
     >
-      {thumb ? (
+      {thumb && !thumbErr ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={thumb} alt="" className="h-full w-full object-cover" />
+        <img
+          src={thumb}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={() => setThumbErr(true)}
+        />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-3xl">🎥</div>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-2xl">
+          🎥
+          <span className="text-[10px] font-semibold text-muted">en traitement…</span>
+        </div>
       )}
       <span className="absolute inset-0 flex items-center justify-center">
         <span className="flex h-12 w-12 items-center justify-center rounded-full bg-pitch-950/70 text-xl text-volt">
@@ -90,6 +99,7 @@ export function ChatRoom({
   const [msgs, setMsgs] = useState<Msg[]>(initial);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [pending, setPending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -196,6 +206,14 @@ export function ChatRoom({
             </div>
           );
         })}
+        {pending && (
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-2 rounded-2xl border border-line bg-pitch-800 px-3.5 py-2 text-sm text-muted">
+              <span className="live-dot inline-block h-1.5 w-1.5 rounded-full bg-volt" />
+              🎥 Ton react s&apos;envoie…
+            </div>
+          </div>
+        )}
         <div ref={endRef} />
       </div>
 
@@ -205,7 +223,12 @@ export function ChatRoom({
         style={{ bottom: "calc(54px + env(safe-area-inset-bottom))" }}
       >
         <div className="flex items-center gap-2">
-          <RecordReact userId={myUserId} matchId={matchId} />
+          <RecordReact
+            userId={myUserId}
+            matchId={matchId}
+            onPending={() => setPending(true)}
+            onSettled={() => setPending(false)}
+          />
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}

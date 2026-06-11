@@ -9,7 +9,17 @@ const MAX_MS = 20000;
 type Phase = "closed" | "init" | "ready" | "recording" | "preview" | "uploading";
 type Facing = "user" | "environment";
 
-export function RecordReact({ userId, matchId }: { userId: string; matchId: number | null }) {
+export function RecordReact({
+  userId,
+  matchId,
+  onPending,
+  onSettled,
+}: {
+  userId: string;
+  matchId: number | null;
+  onPending?: () => void;
+  onSettled?: (ok: boolean) => void;
+}) {
   const [phase, setPhase] = useState<Phase>("closed");
   const [facing, setFacing] = useState<Facing>("user");
   const [pct, setPct] = useState(0);
@@ -130,6 +140,7 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
     if (!file) return;
     // Retour instantané au chat : on ferme l'écran, l'upload se fait en arrière-plan
     cleanup();
+    onPending?.();
     try {
       const supabase = createClient();
       const { data, error: fnErr } = await supabase.functions.invoke("create-react", { body: {} });
@@ -160,7 +171,9 @@ export function RecordReact({ userId, matchId }: { userId: string; matchId: numb
         thumbnail_url: `https://${cdn}/${data.guid}/thumbnail.jpg`,
         duration: dur,
       });
+      onSettled?.(true);
     } catch {
+      onSettled?.(false);
       setError("Ton react n'a pas pu être envoyé. Réessaie.");
     }
   }
