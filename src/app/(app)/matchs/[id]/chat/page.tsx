@@ -38,7 +38,7 @@ export default async function MatchChatPage({
 
   const { data: msgs } = await supabase
     .from("chat_messages")
-    .select("id, user_id, content, type, created_at, match_id")
+    .select("id, user_id, content, type, created_at, match_id, media_type, media_url, thumbnail_url, duration")
     .eq("match_id", matchId)
     .order("created_at", { ascending: false })
     .limit(60);
