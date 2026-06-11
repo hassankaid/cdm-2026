@@ -28,50 +28,48 @@ function timeLabel(iso: string, tz: string) {
 function VideoBubble({ guid }: { guid: string }) {
   const lib = process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID;
   const [ready, setReady] = useState(false);
+  const [waited, setWaited] = useState(false);
 
-  // On interroge le VRAI statut chez Bunny : on n'affiche le lecteur que quand
-  // le transcodage est terminé (status 4). Sinon Bunny montre un poster
-  // "Processing video". Sondage toutes les 2,5 s.
+  // On interroge en boucle le VRAI statut Bunny et on n'affiche le lecteur que
+  // quand le transcodage est terminé (status 4) — sinon Bunny montre un poster
+  // "Processing video".
   useEffect(() => {
     if (ready) return;
-    let cancelled = false;
-    let tries = 0;
-    let timer: ReturnType<typeof setTimeout>;
-    async function check() {
-      tries++;
-      try {
-        const { data } = await createClient().functions.invoke("react-status", {
-          body: { guid },
-        });
-        if (cancelled) return;
-        if (data?.status === 4) {
-          setReady(true);
-          return;
+    let stop = false;
+    const supabase = createClient();
+    (async () => {
+      for (let n = 0; n < 60 && !stop; n++) {
+        try {
+          const { data } = await supabase.functions.invoke("react-status", { body: { guid } });
+          if (stop) return;
+          if (data?.status === 4) {
+            setReady(true);
+            return;
+          }
+        } catch {
+          /* on réessaie au tour suivant */
         }
-      } catch {
-        /* on réessaie */
+        await new Promise((r) => setTimeout(r, 2500));
       }
-      if (!cancelled) {
-        if (tries > 40) {
-          setReady(true); // garde-fou (~100 s)
-          return;
-        }
-        timer = setTimeout(check, 2500);
-      }
-    }
-    check();
+      if (!stop) setReady(true); // garde-fou (~150 s)
+    })();
+    const wt = setTimeout(() => !stop && setWaited(true), 8000);
     return () => {
-      cancelled = true;
-      clearTimeout(timer);
+      stop = true;
+      clearTimeout(wt);
     };
   }, [ready, guid]);
 
   if (!ready) {
     return (
-      <div className="flex aspect-[9/16] w-52 max-w-[78%] flex-col items-center justify-center gap-2 rounded-2xl border border-line bg-pitch-900/50">
+      <button
+        onClick={() => setReady(true)}
+        className="flex aspect-[9/16] w-52 max-w-[78%] flex-col items-center justify-center gap-2 rounded-2xl border border-line bg-pitch-900/50"
+      >
         <span className="animate-pulse text-2xl">🎥</span>
         <span className="text-[11px] font-semibold text-muted">Ton react arrive…</span>
-      </div>
+        {waited && <span className="text-[10px] font-semibold text-volt">Toucher pour afficher</span>}
+      </button>
     );
   }
 
