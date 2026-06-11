@@ -18,7 +18,7 @@ export function RecordReact({
   userId: string;
   matchId: number | null;
   onPending?: () => void;
-  onSettled?: (ok: boolean) => void;
+  onSettled?: (ok: boolean, msg?: unknown) => void;
 }) {
   const [phase, setPhase] = useState<Phase>("closed");
   const [facing, setFacing] = useState<Facing>("user");
@@ -162,16 +162,20 @@ export function RecordReact({
         up.start();
       });
       const cdn = process.env.NEXT_PUBLIC_BUNNY_CDN;
-      await supabase.from("chat_messages").insert({
-        user_id: userId,
-        match_id: matchId,
-        type: "user",
-        media_type: "video",
-        media_url: data.guid,
-        thumbnail_url: `https://${cdn}/${data.guid}/thumbnail.jpg`,
-        duration: dur,
-      });
-      onSettled?.(true);
+      const { data: row } = await supabase
+        .from("chat_messages")
+        .insert({
+          user_id: userId,
+          match_id: matchId,
+          type: "user",
+          media_type: "video",
+          media_url: data.guid,
+          thumbnail_url: `https://${cdn}/${data.guid}/thumbnail.jpg`,
+          duration: dur,
+        })
+        .select("id, user_id, content, type, created_at, match_id, media_type, media_url, thumbnail_url, duration")
+        .single();
+      onSettled?.(true, row);
     } catch {
       onSettled?.(false);
       setError("Ton react n'a pas pu être envoyé. Réessaie.");

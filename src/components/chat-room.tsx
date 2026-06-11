@@ -227,7 +227,13 @@ export function ChatRoom({
             userId={myUserId}
             matchId={matchId}
             onPending={() => setPending(true)}
-            onSettled={() => setPending(false)}
+            onSettled={(ok, msg) => {
+              setPending(false);
+              if (ok && msg) {
+                const m = msg as Msg;
+                setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+              }
+            }}
           />
           <input
             value={text}
