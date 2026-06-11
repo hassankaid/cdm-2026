@@ -32,13 +32,6 @@ function mapEventType(apiType: string, detail: string): string | null {
   return null;
 }
 
-const eventKey = (e: {
-  type: string;
-  minute: number | null;
-  player_name: string | null;
-  team_id: number | null;
-}) => `${e.type}|${e.minute ?? ""}|${e.player_name ?? ""}|${e.team_id ?? ""}`;
-
 Deno.serve(async (req) => {
   const secret = Deno.env.get("SYNC_SECRET");
   if (secret && req.headers.get("x-sync-secret") !== secret) {
@@ -265,7 +258,29 @@ Deno.serve(async (req) => {
 
     // Buts existants indexés par (type, minute, équipe) → pour compléter le buteur
     const goalByStable = new Map<string, { id: number; player_name: string | null }>();
-    const seenFull = new Set<string>();
+    // Événements hors-but (carton, remplacement, var) : dédoublonnage TOLÉRANT à la
+    // minute — l'API révise parfois la minute d'un même événement de ±1 d'une synchro
+    // à l'autre (ex. carton rouge passé de 50' à 49'), ce qui créait des doublons.
+    const NON_GOAL_TOL = 3;
+    const nonGoals: {
+      type: string;
+      minute: number | null;
+      player_name: string | null;
+      team_id: number | null;
+    }[] = [];
+    const nonGoalDup = (
+      type: string,
+      minute: number | null,
+      player: string | null,
+      team: number | null,
+    ) =>
+      nonGoals.some(
+        (e) =>
+          e.type === type &&
+          (e.player_name ?? "") === (player ?? "") &&
+          (e.team_id ?? null) === (team ?? null) &&
+          Math.abs((e.minute ?? 0) - (minute ?? 0)) <= NON_GOAL_TOL,
+      );
     for (const e of existing ?? []) {
       if (isGoal(e.type as string)) {
         const k = stableKey(e.type, e.minute, e.minute_extra, e.team_id);
@@ -274,7 +289,12 @@ Deno.serve(async (req) => {
           goalByStable.set(k, { id: e.id as number, player_name: (e.player_name as string) ?? null });
         }
       } else {
-        seenFull.add(eventKey(e as never));
+        nonGoals.push({
+          type: e.type as string,
+          minute: e.minute as number | null,
+          player_name: (e.player_name as string) ?? null,
+          team_id: (e.team_id as number) ?? null,
+        });
       }
     }
 
@@ -325,9 +345,13 @@ Deno.serve(async (req) => {
         goalByStable.set(k, { id: 0, player_name: (row.player_name as string) ?? null });
         toInsert.push(row);
       } else {
-        const fk = eventKey(row as never);
-        if (seenFull.has(fk)) continue;
-        seenFull.add(fk);
+        if (nonGoalDup(type, row.minute, row.player_name, row.team_id)) continue;
+        nonGoals.push({
+          type,
+          minute: row.minute,
+          player_name: row.player_name,
+          team_id: row.team_id,
+        });
         toInsert.push(row);
       }
     }
