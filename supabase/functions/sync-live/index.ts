@@ -77,10 +77,13 @@ Deno.serve(async (req) => {
   // Map api_team_id -> id interne + nom FR (pour les notifs)
   const { data: dbTeams } = await supabase.from("teams").select("id, api_team_id, name, name_fr");
   const teamId = new Map<number, number>();
-  const teamName = new Map<number, string>();
+  const teamName = new Map<number, string>(); // api_team_id -> nom
+  const teamNameById = new Map<number, string>(); // id interne -> nom
   for (const t of dbTeams ?? []) {
+    const nm = (t.name_fr as string) ?? (t.name as string);
     teamId.set(t.api_team_id as number, t.id as number);
-    teamName.set(t.api_team_id as number, (t.name_fr as string) ?? (t.name as string));
+    teamName.set(t.api_team_id as number, nm);
+    teamNameById.set(t.id as number, nm);
   }
   const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
   const fnHeaders = {
@@ -149,12 +152,71 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Mi-temps : repère dans le fil + notif (une seule fois)
+    if (f.fixture.status?.short === "HT") {
+      const htLog = await supabase
+        .from("notifications_log")
+        .insert({ event_key: `ht-${matchId}`, kind: "mi_temps" });
+      if (!htLog.error) {
+        const score = `${f.goals?.home ?? 0}-${f.goals?.away ?? 0}`;
+        await supabase.from("match_events").insert({
+          match_id: matchId,
+          team_id: null,
+          type: "halftime",
+          minute: f.fixture.status?.elapsed ?? 45,
+          minute_extra: null,
+          player_name: null,
+          assist_name: null,
+          player_out: null,
+          detail: score,
+        });
+        const facts = {
+          equipeA: teamName.get(f.teams.home?.id) ?? f.teams.home?.name,
+          equipeB: teamName.get(f.teams.away?.id) ?? f.teams.away?.name,
+          score,
+        };
+        try {
+          const gen = await fetch(`${SUPA_URL}/functions/v1/generate-notif`, {
+            method: "POST",
+            headers: fnHeaders,
+            body: JSON.stringify({ type: "mi_temps", facts }),
+          }).then((r) => r.json());
+          if (gen?.text) {
+            await fetch(`${SUPA_URL}/functions/v1/send-push`, {
+              method: "POST",
+              headers: fnHeaders,
+              body: JSON.stringify({
+                title: "⏸️ Mi-temps",
+                body: gen.text,
+                url: `/matchs/${matchId}`,
+                tag: `ht-${matchId}`,
+              }),
+            });
+          }
+        } catch (_e) {
+          // une notif ratée n'interrompt pas la synchro
+        }
+      }
+    }
+
     // Notif de fin de match (une seule fois grâce à notifications_log)
     if (status === "finished") {
       const logIns = await supabase
         .from("notifications_log")
         .insert({ event_key: `finish-${matchId}`, kind: "fin_match" });
       if (!logIns.error) {
+        // Repère "fin du match" dans le fil
+        await supabase.from("match_events").insert({
+          match_id: matchId,
+          team_id: null,
+          type: "fulltime",
+          minute: f.fixture.status?.elapsed ?? 90,
+          minute_extra: null,
+          player_name: null,
+          assist_name: null,
+          player_out: null,
+          detail: `${f.goals?.home ?? 0}-${f.goals?.away ?? 0}`,
+        });
         const facts = {
           equipeA: teamName.get(f.teams.home?.id) ?? f.teams.home?.name,
           equipeB: teamName.get(f.teams.away?.id) ?? f.teams.away?.name,
@@ -217,7 +279,15 @@ Deno.serve(async (req) => {
     }
 
     const toInsert: Record<string, unknown>[] = [];
-    const toUpdate: { id: number; player_name: string; assist_name: string | null; detail: string | null }[] = [];
+    const toUpdate: {
+      id: number;
+      player_name: string;
+      assist_name: string | null;
+      detail: string | null;
+      minute: number | null;
+      minute_extra: number | null;
+      team_id: number | null;
+    }[] = [];
     for (const ev of apiEvents) {
       const type = mapEventType(ev.type, ev.detail);
       if (!type) continue;
@@ -244,6 +314,9 @@ Deno.serve(async (req) => {
               player_name: row.player_name as string,
               assist_name: row.assist_name as string | null,
               detail: row.detail as string | null,
+              minute: row.minute as number | null,
+              minute_extra: row.minute_extra as number | null,
+              team_id: row.team_id as number | null,
             });
             ex.player_name = row.player_name as string;
           }
@@ -269,43 +342,88 @@ Deno.serve(async (req) => {
 
     if (toInsert.length > 0) {
       const ins = await supabase.from("match_events").insert(toInsert);
-      if (!ins.error) {
-        eventsInserted += toInsert.length;
+      if (!ins.error) eventsInserted += toInsert.length;
+    }
 
-        // Notifs live sur les buts fraîchement détectés
-        const newGoals = toInsert.filter((e) =>
-          ["goal", "penalty_goal", "own_goal"].includes(e.type as string),
-        );
-        for (const g of newGoals) {
-          const facts = {
-            equipeA: teamName.get(f.teams.home?.id) ?? f.teams.home?.name,
-            equipeB: teamName.get(f.teams.away?.id) ?? f.teams.away?.name,
-            score: `${f.goals?.home ?? 0}-${f.goals?.away ?? 0}`,
-            minute: g.minute,
-            buteur: g.player_name,
-          };
-          try {
-            const gen = await fetch(`${SUPA_URL}/functions/v1/generate-notif`, {
-              method: "POST",
-              headers: fnHeaders,
-              body: JSON.stringify({ type: "live_but", facts }),
-            }).then((r) => r.json());
-            if (gen?.text) {
-              await fetch(`${SUPA_URL}/functions/v1/send-push`, {
-                method: "POST",
-                headers: fnHeaders,
-                body: JSON.stringify({
-                  title: "⚽ BUT !",
-                  body: gen.text,
-                  url: `/matchs/${matchId}`,
-                  tag: `goal-${matchId}-${g.minute}-${g.player_name ?? ""}`,
-                }),
-              });
-            }
-          } catch (_e) {
-            // une notif ratée n'interrompt pas la synchro
-          }
+    // ----- Notifs de BUT : seulement quand le buteur est connu -----
+    // On notifie un but UNE seule fois (clé d'idempotence par minute+équipe).
+    // Cas couverts : but inséré avec buteur, buteur arrivé après coup (update),
+    // et garde-fou pour un but resté sans buteur d'un cycle à l'autre.
+    type GoalNotif = {
+      minute: number | null;
+      minute_extra: number | null;
+      team_id: number | null;
+      player_name: string | null;
+    };
+    const goalsToNotify: GoalNotif[] = [];
+
+    // 1) buts fraîchement insérés AVEC le buteur
+    for (const e of toInsert) {
+      if (isGoal(e.type as string) && e.player_name) {
+        goalsToNotify.push({
+          minute: e.minute as number | null,
+          minute_extra: e.minute_extra as number | null,
+          team_id: e.team_id as number | null,
+          player_name: e.player_name as string,
+        });
+      }
+    }
+    // 2) buts dont le buteur vient d'être complété
+    for (const u of toUpdate) {
+      goalsToNotify.push({
+        minute: u.minute,
+        minute_extra: u.minute_extra,
+        team_id: u.team_id,
+        player_name: u.player_name,
+      });
+    }
+    // 3) garde-fou : but déjà en base, toujours sans buteur, non complété ce cycle
+    const enrichedIds = new Set(toUpdate.map((u) => u.id));
+    for (const e of existing ?? []) {
+      if (isGoal(e.type as string) && !e.player_name && !enrichedIds.has(e.id as number)) {
+        goalsToNotify.push({
+          minute: e.minute as number | null,
+          minute_extra: e.minute_extra as number | null,
+          team_id: e.team_id as number | null,
+          player_name: null,
+        });
+      }
+    }
+
+    for (const g of goalsToNotify) {
+      const key = `goal-${matchId}-${g.minute ?? "?"}-${g.minute_extra ?? 0}-${g.team_id ?? "x"}`;
+      const log = await supabase
+        .from("notifications_log")
+        .insert({ event_key: key, kind: "live_but" });
+      if (log.error) continue; // déjà notifié
+      const facts = {
+        equipeA: teamName.get(f.teams.home?.id) ?? f.teams.home?.name,
+        equipeB: teamName.get(f.teams.away?.id) ?? f.teams.away?.name,
+        equipeButeur: g.team_id != null ? teamNameById.get(g.team_id) ?? null : null,
+        score: `${f.goals?.home ?? 0}-${f.goals?.away ?? 0}`,
+        minute: g.minute,
+        buteur: g.player_name,
+      };
+      try {
+        const gen = await fetch(`${SUPA_URL}/functions/v1/generate-notif`, {
+          method: "POST",
+          headers: fnHeaders,
+          body: JSON.stringify({ type: "live_but", facts }),
+        }).then((r) => r.json());
+        if (gen?.text) {
+          await fetch(`${SUPA_URL}/functions/v1/send-push`, {
+            method: "POST",
+            headers: fnHeaders,
+            body: JSON.stringify({
+              title: "⚽ BUT !",
+              body: gen.text,
+              url: `/matchs/${matchId}`,
+              tag: key,
+            }),
+          });
         }
+      } catch (_e) {
+        // une notif ratée n'interrompt pas la synchro
       }
     }
   }

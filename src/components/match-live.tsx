@@ -43,6 +43,8 @@ const EVENT_ICON: Record<string, string> = {
   red: "🟥",
   subst: "🔄",
   var: "📺",
+  halftime: "⏸️",
+  fulltime: "🏁",
 };
 
 function eventLabel(e: Ev): string {
@@ -276,6 +278,20 @@ export function MatchLive(props: {
           ) : (
             <div className="flex flex-col gap-2">
               {events.map((e) => {
+                // Repères centrés : mi-temps / fin du match
+                if (e.type === "halftime" || e.type === "fulltime") {
+                  return (
+                    <div key={e.id} className="my-1.5 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-line/60" />
+                      <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                        <span>{EVENT_ICON[e.type]}</span>
+                        {e.type === "halftime" ? "Mi-temps" : "Fin du match"}
+                        {e.detail && <span className="text-ink">· {e.detail}</span>}
+                      </span>
+                      <div className="h-px flex-1 bg-line/60" />
+                    </div>
+                  );
+                }
                 const isHome = e.team_id === home.id;
                 return (
                   <div

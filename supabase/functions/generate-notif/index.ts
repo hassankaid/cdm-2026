@@ -17,7 +17,10 @@ const OBJECTIFS: Record<string, string> = {
   boss: "Félicite le meilleur pronostiqueur du moment (le 'boss du jour'). Donne-lui de l'ego, sans idolâtrie.",
   live_tient:
     "Suspense : le prono d'un joueur est en train de passer en plein match. Donne envie que ça tienne jusqu'au bout.",
-  live_but: "Réagis à chaud à un événement du match (but, égalisation, retournement).",
+  live_but:
+    "RÉAGIS À CHAUD À UN BUT. Nomme TOUJOURS le buteur et sa minute, et l'équipe qui marque. Mets l'ambiance comme un commentateur survolté (but, égalisation, doublé, retournement) tout en restant bon enfant.",
+  mi_temps:
+    "C'est la mi-temps. Donne le score à la pause avec une vanne légère sur la suite (qui doit se réveiller, qui gère, etc.). Bon enfant.",
   tacle: "Mets en avant ou charrie gentiment un joueur précis.",
   top3: "Annonce le top 3 actuel du classement avec du piquant.",
   recap: "Résume avec humour les résultats et le classement du jour (2-3 phrases max).",
