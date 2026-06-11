@@ -48,7 +48,7 @@ export default async function Home() {
       <main className="flex-1 px-5 pb-24 pt-6">
         {/* Accueil */}
         <section className="rise">
-          <p className="text-sm text-muted">Salam ’alaykoum 👋</p>
+          <p className="text-sm text-muted">Salam 👋</p>
           <h1 className="font-display text-4xl text-ink">{name}</h1>
           <p className="mt-1 text-sm text-muted">
             La Coupe du Monde commence. Place tes pronos et grimpe au classement.
