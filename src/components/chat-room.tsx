@@ -27,8 +27,41 @@ function timeLabel(iso: string, tz: string) {
 
 function VideoBubble({ guid }: { guid: string }) {
   const lib = process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID;
-  // Lecteur Bunny directement : il affiche la vraie image de la vidéo en
-  // aperçu, et la lecture (au tap sur ▶) se fait AVEC le son.
+  const cdn = process.env.NEXT_PUBLIC_BUNNY_CDN;
+  const [ready, setReady] = useState(false);
+  const [tries, setTries] = useState(0);
+
+  // On sonde la miniature : elle n'existe qu'une fois le transcodage Bunny
+  // terminé → on n'affiche le lecteur QUE quand la vidéo est réellement lisible.
+  useEffect(() => {
+    if (ready) return;
+    if (tries > 24) {
+      setReady(true); // garde-fou (~60 s) : on tente le lecteur quand même
+      return;
+    }
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (!cancelled) setReady(true);
+    };
+    img.onerror = () => {
+      if (!cancelled) setTimeout(() => !cancelled && setTries((t) => t + 1), 2500);
+    };
+    img.src = `https://${cdn}/${guid}/thumbnail.jpg?t=${tries}`;
+    return () => {
+      cancelled = true;
+    };
+  }, [tries, ready, cdn, guid]);
+
+  if (!ready) {
+    return (
+      <div className="flex aspect-[9/16] w-52 max-w-[78%] flex-col items-center justify-center gap-2 rounded-2xl border border-line bg-pitch-900/50">
+        <span className="animate-pulse text-2xl">🎥</span>
+        <span className="text-[11px] font-semibold text-muted">Ton react arrive…</span>
+      </div>
+    );
+  }
+
   return (
     <div className="aspect-[9/16] w-52 max-w-[78%] overflow-hidden rounded-2xl border border-line bg-black">
       <iframe
