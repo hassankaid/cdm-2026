@@ -27,31 +27,44 @@ function timeLabel(iso: string, tz: string) {
 
 function VideoBubble({ guid }: { guid: string }) {
   const lib = process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID;
-  const cdn = process.env.NEXT_PUBLIC_BUNNY_CDN;
   const [ready, setReady] = useState(false);
-  const [tries, setTries] = useState(0);
 
-  // On sonde la miniature : elle n'existe qu'une fois le transcodage Bunny
-  // terminé → on n'affiche le lecteur QUE quand la vidéo est réellement lisible.
+  // On interroge le VRAI statut chez Bunny : on n'affiche le lecteur que quand
+  // le transcodage est terminé (status 4). Sinon Bunny montre un poster
+  // "Processing video". Sondage toutes les 2,5 s.
   useEffect(() => {
     if (ready) return;
-    if (tries > 24) {
-      setReady(true); // garde-fou (~60 s) : on tente le lecteur quand même
-      return;
-    }
     let cancelled = false;
-    const img = new Image();
-    img.onload = () => {
-      if (!cancelled) setReady(true);
-    };
-    img.onerror = () => {
-      if (!cancelled) setTimeout(() => !cancelled && setTries((t) => t + 1), 2500);
-    };
-    img.src = `https://${cdn}/${guid}/thumbnail.jpg?t=${tries}`;
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    async function check() {
+      tries++;
+      try {
+        const { data } = await createClient().functions.invoke("react-status", {
+          body: { guid },
+        });
+        if (cancelled) return;
+        if (data?.status === 4) {
+          setReady(true);
+          return;
+        }
+      } catch {
+        /* on réessaie */
+      }
+      if (!cancelled) {
+        if (tries > 40) {
+          setReady(true); // garde-fou (~100 s)
+          return;
+        }
+        timer = setTimeout(check, 2500);
+      }
+    }
+    check();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [tries, ready, cdn, guid]);
+  }, [ready, guid]);
 
   if (!ready) {
     return (
