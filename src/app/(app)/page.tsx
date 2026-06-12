@@ -27,6 +27,17 @@ export default async function Home() {
   const initial = name.charAt(0).toUpperCase();
   const players = board ?? [];
 
+  // Rang avec ex æquo : à points égaux, même position (1, 1, 3, …)
+  let prevPts: number | null = null;
+  let prevRank = 0;
+  const ranked = players.map((p, i) => {
+    const pts = (p.total_points as number | null) ?? 0;
+    const rank = i > 0 && pts === prevPts ? prevRank : i + 1;
+    prevPts = pts;
+    prevRank = rank;
+    return { p, pts, rank };
+  });
+
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col">
       {/* Barre du haut */}
@@ -115,10 +126,10 @@ export default async function Home() {
           </h2>
 
           <div className="overflow-hidden rounded-2xl border border-line bg-pitch-900/40">
-            {players.map((p, i) => {
+            {ranked.map(({ p, pts, rank }, i) => {
               const isMe = p.user_id === user.id;
               const rankColor =
-                i === 0 ? "text-gold" : i === 1 ? "text-ink" : "text-muted";
+                rank === 1 ? "text-gold" : rank === 2 ? "text-ink" : "text-muted";
               return (
                 <div
                   key={p.user_id ?? i}
@@ -129,7 +140,7 @@ export default async function Home() {
                   <span
                     className={`w-6 text-center font-display text-lg ${rankColor}`}
                   >
-                    {i + 1}
+                    {rank}
                   </span>
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-pitch-800 text-sm font-bold text-ink">
                     {(p.display_name ?? "?").charAt(0).toUpperCase()}
@@ -139,7 +150,7 @@ export default async function Home() {
                     {isMe && <span className="ml-1 text-volt">· toi</span>}
                   </span>
                   <span className="font-display text-lg text-ink">
-                    {p.total_points ?? 0}
+                    {pts}
                     <span className="ml-1 font-sans text-xs text-muted">pts</span>
                   </span>
                 </div>
